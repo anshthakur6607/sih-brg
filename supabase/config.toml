@@ -1,0 +1,59 @@
+# Supabase CLI Configuration
+# This file helps manage Supabase migrations locally
+
+[project]
+id = "skillup-platform"
+
+# Database settings
+[database]
+host = "localhost"
+port = 54321
+database = "postgres"
+user = "postgres"
+password = "postgres"
+
+# API settings
+[api]
+enabled = true
+port = 54321
+
+# Studio settings
+[studio]
+enabled = true
+port = 54323
+
+# Inbucket settings (email testing)
+[inbucket]
+enabled = true
+port = 54324
+
+# Storage settings
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+# Auth settings
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://localhost:3000"]
+jwt_expiry = 3600
+enable_signup = true
+
+# SMTP settings (for production)
+[smtp]
+enabled = false
+
+# Edge functions settings
+[edge_runtime]
+enabled = true
+
+# Migration settings
+[migrations]
+# Path to migration files
+dir = "./supabase/migrations"
+
+# Seed settings
+[seed]
+# Path to seed files  
+dir = "./supabase/seed"

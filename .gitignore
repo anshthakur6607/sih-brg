@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+backend_stderr.log
+backend_stdout.log
+backend.log 
+err.log
+out.log
+.pnpm-debug.log*
+
+# Environment variables
+.env
+.env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build output
+/dist
+/build
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+/coverage
+.nyc_output
+
+# Vercel
+.vercel
+
+# Supabase local
+.branches/
+.temp/
+
+# TypeScript
+*.tsbuildinfo
