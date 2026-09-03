@@ -69,8 +69,17 @@ async function handleClient(clientWs: WebSocket, token: string | null) {
     return;
   }
 
+  const pendingClientQueue: Array<{ data: any; isBinary: boolean }> = [];
+  let upstreamReady = false;
+
   upstream.on('open', () => {
+    upstreamReady = true;
     log(tag, 'upstream open, bridging');
+    // Flush any messages that arrived before upstream was ready (fixes init race)
+    for (const item of pendingClientQueue) {
+      try { upstream.send(item.data, { binary: item.isBinary }); } catch {}
+    }
+    pendingClientQueue.length = 0;
   });
 
   upstream.on('message', (data, isBinary) => {
@@ -89,10 +98,12 @@ async function handleClient(clientWs: WebSocket, token: string | null) {
     try { clientWs.close(code, 'Upstream closed'); } catch {}
   });
 
-  // 3. Forward client → upstream
+  // 3. Forward client → upstream (queue if upstream not yet open)
   clientWs.on('message', (data, isBinary) => {
-    if (upstream.readyState === WebSocket.OPEN) {
+    if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
       try { upstream.send(data, { binary: isBinary }); } catch {}
+    } else {
+      pendingClientQueue.push({ data, isBinary });
     }
   });
 

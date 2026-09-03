@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { asyncHandler, NotFoundError, ForbiddenError } from '../middleware/errorHandler.js';
 import { requireAdmin, requireManager, type AuthenticatedRequest } from '../middleware/auth.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
@@ -229,13 +230,18 @@ router.post('/reviews/:attemptId', requireAdmin, asyncHandler(async (req: Authen
   if (!attempt) {
     throw new NotFoundError('Assessment attempt');
   }
+  if (attempt.status !== 'pending') {
+    res.status(409).json({ success: false, error: 'This exam has already been verified and its marks are locked', code: 'MARKS_LOCKED' });
+    return;
+  }
 
   // Update the attempt status
   const { error: updateError } = await supabaseAdmin
     .from('assessment_attempts')
     .update({
       status: review_status,
-      auto_score: final_verified_score, // Override with verified score
+      auto_score: final_verified_score,
+      passed: review_status === 'approved' && final_verified_score >= 70,
     })
     .eq('id', attemptId);
 
@@ -286,6 +292,30 @@ router.post('/reviews/:attemptId', requireAdmin, asyncHandler(async (req: Authen
           p_competency_id: compId,
           p_increase: scoreIncrease,
         });
+      }
+    }
+
+    // Approval is the only path that issues a certificate. The unique course
+    // check makes this idempotent if an admin retries the approval request.
+    const { data: existingCertificate } = await supabaseAdmin
+      .from('certificates')
+      .select('id')
+      .eq('user_id', attempt.user_id)
+      .eq('course_id', attempt.course_id)
+      .maybeSingle();
+    if (!existingCertificate) {
+      const { error: certificateError } = await supabaseAdmin.from('certificates').insert({
+        user_id: attempt.user_id,
+        course_id: attempt.course_id,
+        verification_code: `SU-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${uuidv4().replace(/-/g, '').slice(0, 8).toUpperCase()}`,
+        auto_score: attempt.auto_score || 0,
+        verified_score: final_verified_score,
+        signed_by_admin: adminId,
+      });
+      if (certificateError) {
+        console.error('Certificate issuance error:', certificateError);
+        res.status(500).json({ success: false, error: 'Exam approved but certificate issuance failed', code: 'CERTIFICATE_FAILED' });
+        return;
       }
     }
   }

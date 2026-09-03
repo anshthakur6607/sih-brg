@@ -25,9 +25,11 @@ const router = Router();
  * Validation schemas
  */
 const submitAnswerSchema = z.object({
-  question_id: z.string().uuid(),
-  answer_index: z.number().min(0).max(3),
-  time_taken_seconds: z.number().min(0),
+  // AI-generated exam questions use stable q_* IDs rather than database UUIDs.
+  question_id: z.string().min(1),
+  answer_index: z.number().int().min(0).max(3),
+  time_taken_seconds: z.number().min(0).default(0),
+  correct_answer: z.number().int().min(0).max(3).optional(),
 });
 
 const submitAssessmentSchema = z.object({
@@ -155,6 +157,23 @@ router.post('/start', asyncHandler(async (req: AuthenticatedRequest, res: Respon
 
   if (!course) {
     throw new NotFoundError('Course');
+  }
+
+  // Exams are gatekeeper assessments: the learner must finish the course
+  // before an attempt can be created.
+  const { data: enrollment } = await supabaseAdmin
+    .from('course_enrollments')
+    .select('status, progress_percentage')
+    .eq('user_id', userId)
+    .eq('course_id', course_id)
+    .maybeSingle();
+  if (!enrollment || enrollment.status !== 'completed' || enrollment.progress_percentage < 100) {
+    res.status(403).json({
+      success: false,
+      error: 'Complete the course before starting the exam',
+      code: 'COURSE_NOT_COMPLETED',
+    });
+    return;
   }
 
   // Create new assessment attempt
@@ -323,12 +342,13 @@ router.post('/submit', submissionRateLimiter, asyncHandler(async (req: Authentic
     throw new NotFoundError('Assessment attempt');
   }
 
-  // Grade answers (simplified - in production would have answer key)
+  // Grade generated questions against the answer key returned by the AI
+  // service. The answer key is never rendered while the exam is in progress.
   let correctAnswers = 0;
   const gradedAnswers = answers.map((answer) => {
-    // In production, would check against stored correct answer
-    // For demo, simulate grading
-    const isCorrect = Math.random() > 0.3; // 70% chance correct for demo
+    const isCorrect = answer.correct_answer !== undefined
+      ? answer.answer_index === answer.correct_answer
+      : false;
     if (isCorrect) correctAnswers++;
     return { ...answer, is_correct: isCorrect };
   });
@@ -346,7 +366,8 @@ router.post('/submit', submissionRateLimiter, asyncHandler(async (req: Authentic
       tab_switch_count,
       fullscreen_exits,
       time_taken_seconds,
-      status: passed ? 'approved' : 'pending', // Auto-approve passing grades
+      // Every attempt must be verified by an admin, including passing scores.
+      status: 'pending',
     })
     .eq('id', attempt_id)
     .select()
@@ -362,23 +383,6 @@ router.post('/submit', submissionRateLimiter, asyncHandler(async (req: Authentic
     return;
   }
 
-  // Update user competency scores based on results
-  if (attempt.course?.target_competencies) {
-    for (const compId of attempt.course.target_competencies) {
-      // Increase current score based on performance
-      const scoreIncrease = passed ? 0.5 : 0.2;
-      
-      await supabaseAdmin
-        .from('user_competency_scores')
-        .update({
-          current_score: Math.min(5.0, (await getCurrentScore(userId, compId)) + scoreIncrease),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId)
-        .eq('competency_id', compId);
-    }
-  }
-
   res.json({
     success: true,
     data: {
@@ -391,7 +395,7 @@ router.post('/submit', submissionRateLimiter, asyncHandler(async (req: Authentic
       },
       graded_answers: gradedAnswers,
     },
-    message: passed ? 'Assessment passed!' : 'Assessment completed. Review to improve.',
+      message: 'Exam submitted. An administrator must verify the marks before they are locked.',
   });
 }));
 

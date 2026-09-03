@@ -75,7 +75,7 @@ router.post('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) =
     try {
       await fetch(`${process.env.AI_SERVICE_URL}/api/ai/rag/ingest`, {
         method: 'POST',
-        headers: { 'X-API-Key': process.env.AI_SERVICE_API_KEY || '' },
+      headers: { 'X-API-Key': process.env.AI_SERVICE_API_KEY || '', 'Content-Type': 'application/json' },
         body: JSON.stringify({
           course_id,
           material_id: data.id,
@@ -213,7 +213,7 @@ router.post('/ingest-from-url', asyncHandler(async (req: AuthenticatedRequest, r
     try {
       await fetch(`${process.env.AI_SERVICE_URL}/api/ai/rag/ingest`, {
         method: 'POST',
-        headers: { 'X-API-Key': process.env.AI_SERVICE_API_KEY || '' },
+      headers: { 'X-API-Key': process.env.AI_SERVICE_API_KEY || '', 'Content-Type': 'application/json' },
         body: JSON.stringify({
           course_id,
           material_id: data.id,

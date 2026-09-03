@@ -174,18 +174,21 @@ router.get('/gaps', asyncHandler(async (req: AuthenticatedRequest, res: Response
       gaps: {
         high: highGaps.map((s) => ({
           ...s.competency,
+          domain: s.competency?.domain?.name || 'Unknown',
           current_score: s.current_score,
           required_score: s.required_score,
           gap_score: s.gap_score,
         })),
         medium: mediumGaps.map((s) => ({
           ...s.competency,
+          domain: s.competency?.domain?.name || 'Unknown',
           current_score: s.current_score,
           required_score: s.required_score,
           gap_score: s.gap_score,
         })),
         achieved: achieved.map((s) => ({
           ...s.competency,
+          domain: s.competency?.domain?.name || 'Unknown',
           current_score: s.current_score,
           required_score: s.required_score,
           gap_score: s.gap_score,
@@ -193,49 +196,6 @@ router.get('/gaps', asyncHandler(async (req: AuthenticatedRequest, res: Response
       },
       domain_progress: domainProgress,
     },
-  });
-}));
-
-/**
- * GET /api/competencies/:id
- *
- * Returns detailed competency information.
- *
- * Why: Users need detailed info about specific competencies.
- *
- * NOTE: This must be defined AFTER specific routes like /domains, /gaps
- * so it does not capture them as an :id parameter.
- */
-router.get('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const id = String(req.params.id);
-
-  // Reject paths that look like reserved routes (defensive)
-  if (['gaps', 'domains', 'assess'].includes(id)) {
-    res.status(404).json({ success: false, error: `Route /${id} not found`, code: 'NOT_FOUND' });
-    return;
-  }
-
-  const { data: competency, error } = await supabaseAdmin
-    .from('competencies')
-    .select(`
-      *,
-      domain:competency_domains(*)
-    `)
-    .eq('id', id)
-    .single();
-
-  if (error || !competency) {
-    res.status(404).json({
-      success: false,
-      error: 'Competency not found',
-      code: 'NOT_FOUND',
-    });
-    return;
-  }
-
-  res.json({
-    success: true,
-    data: competency,
   });
 }));
 
@@ -342,6 +302,42 @@ router.post('/assess', asyncHandler(async (req: AuthenticatedRequest, res: Respo
       survey_applied: !!familiarity_scores,
       gaps: { high, medium, achieved: (scores.length - high - medium) },
     },
+  });
+}));
+
+/**
+ * GET /api/competencies/:id
+ *
+ * Keep this catch-all route after all named competency routes. Express matches
+ * routes in declaration order, so placing it earlier makes /gaps and /assess
+ * get treated as competency IDs.
+ */
+// UUID constraint makes this route safe even if an older compiled server has
+// a different declaration order: /gaps and /domains can never be IDs.
+router.get('/:id([0-9a-fA-F-]{36})', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const id = String(req.params.id);
+
+  const { data: competency, error } = await supabaseAdmin
+    .from('competencies')
+    .select(`
+      *,
+      domain:competency_domains(*)
+    `)
+    .eq('id', id)
+    .single();
+
+  if (error || !competency) {
+    res.status(404).json({
+      success: false,
+      error: 'Competency not found',
+      code: 'NOT_FOUND',
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: competency,
   });
 }));
 

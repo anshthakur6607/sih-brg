@@ -106,6 +106,51 @@ CREATE POLICY "Service role full access suggestions"
   USING (auth.jwt()->>'role' = 'service_role');
 
 -- ============================================================
+-- 5. QUIZ QUESTIONS TABLE
+-- Why: Store quiz questions with competency linkage + user tracking
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.questions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id UUID REFERENCES public.courses(id) ON DELETE CASCADE,
+  competency_id UUID REFERENCES public.competencies(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  options JSONB NOT NULL,
+  correct_answer INT NOT NULL,
+  bloom_level TEXT NOT NULL DEFAULT 'remember',
+  difficulty_beta DECIMAL(5,2) DEFAULT 0.0,
+  explanation TEXT,
+  language TEXT DEFAULT 'en',
+  source_s3_key TEXT,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- If questions already existed from 002_migration_v2_spec.sql (without user_id), add column safely
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='questions')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='questions' AND column_name='user_id') THEN
+    ALTER TABLE public.questions ADD COLUMN user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='questions' AND policyname='Users see questions in enrolled courses') THEN
+    CREATE POLICY "Users see questions in enrolled courses"
+      ON public.questions FOR SELECT
+      USING (auth.role() = 'authenticated');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='questions' AND policyname='Service role full access questions') THEN
+    CREATE POLICY "Service role full access questions"
+      ON public.questions FOR ALL
+      USING (auth.jwt()->>'role' = 'service_role');
+  END IF;
+END $$;
+
+-- ============================================================
 -- Verify all tables
 -- ============================================================
 SELECT 'admin_banners' as table_name, COUNT(*) as rows FROM public.admin_banners
@@ -114,4 +159,6 @@ SELECT 'course_reminders', COUNT(*) FROM public.course_reminders
 UNION ALL
 SELECT 'dismissed_banners', COUNT(*) FROM public.dismissed_banners
 UNION ALL
-SELECT 'ai_daily_suggestions', COUNT(*) FROM public.ai_daily_suggestions;
+SELECT 'ai_daily_suggestions', COUNT(*) FROM public.ai_daily_suggestions
+UNION ALL
+SELECT 'questions', COUNT(*) FROM public.questions;

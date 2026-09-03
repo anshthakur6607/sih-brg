@@ -3,21 +3,38 @@
 -- Run in Supabase SQL Editor AFTER seed_courses
 -- ============================================
 
--- 1. Add per-user columns to questions (must exist before DELETE)
+-- 1. Ensure questions table exists (run seed_courses.sql first, but create if missing for fresh DBs)
+CREATE TABLE IF NOT EXISTS public.questions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  competency_id UUID REFERENCES public.competencies(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  options JSONB NOT NULL,
+  correct_answer INT NOT NULL,
+  bloom_level TEXT,
+  difficulty_beta NUMERIC(5,2) DEFAULT 0.0,
+  explanation TEXT
+);
+
+-- 1b. Add per-user columns (safe even if table was just created - check both table and column existence)
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='questions' AND column_name='user_id') THEN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='questions')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='questions' AND column_name='user_id') THEN
     ALTER TABLE public.questions ADD COLUMN user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='questions' AND column_name='s3_key') THEN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='questions')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='questions' AND column_name='s3_key') THEN
     ALTER TABLE public.questions ADD COLUMN s3_key TEXT;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='questions' AND column_name='quiz_id') THEN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='questions')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='questions' AND column_name='quiz_id') THEN
     ALTER TABLE public.questions ADD COLUMN quiz_id UUID DEFAULT gen_random_uuid();
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='questions' AND column_name='language') THEN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='questions')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='questions' AND column_name='language') THEN
     ALTER TABLE public.questions ADD COLUMN language TEXT DEFAULT 'en';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='questions' AND column_name='source') THEN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='questions')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='questions' AND column_name='source') THEN
     ALTER TABLE public.questions ADD COLUMN source TEXT DEFAULT 'ai_generated';
   END IF;
 END $$;
