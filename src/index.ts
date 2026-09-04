@@ -68,9 +68,25 @@ app.use(helmet({
 }));
 
 // CORS configuration
-// Why: Allow frontend to communicate with backend
+// Why: Allow frontend to communicate with backend (local + Vercel)
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'https://frg-sable.vercel.app',
+  'https://brg-sable.vercel.app',
+  'https://*.vercel.app',
+];
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const ok = allowedOrigins.some(o => {
+      if (o.includes('*')) {
+        const re = new RegExp('^' + o.replace('*.', '.*').replace(/\./g,'\\.').replace('.*','.*') + '$');
+        return re.test(origin);
+      }
+      return o === origin;
+    }) || origin.endsWith('.vercel.app') || origin.includes('localhost');
+    callback(null, ok);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
