@@ -39,6 +39,7 @@ import gamificationRoutes from './routes/gamification.js';
 import bannerRoutes from './routes/banners.js';
 import remindersRoutes from './routes/reminders.js';
 import dailySuggestionsRoutes from './routes/dailySuggestions.js';
+import investigatorPassRoutes from './routes/investigatorPasses.js';
 
 // Import middleware
 import { verifyToken } from './middleware/auth.js';
@@ -151,6 +152,7 @@ app.use('/api/gamification', verifyToken, gamificationRoutes);
 app.use('/api/banners', verifyToken, bannerRoutes);
 app.use('/api/reminders', verifyToken, remindersRoutes);
 app.use('/api/daily-suggestions', verifyToken, dailySuggestionsRoutes);
+app.use('/api/investigator-passes', investigatorPassRoutes);
 
 // Public integration endpoints (webhooks, external APIs)
 app.use('/api/integrations', integrationsRoutes);

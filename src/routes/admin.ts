@@ -495,6 +495,49 @@ router.get('/heatmap', requireAdmin, asyncHandler(async (req: AuthenticatedReque
 }));
 
 /**
+ * GET /api/admin/des-heatmap
+ * For PDF: Departmental Competency Heatmap — regional skill gaps across DES State/District
+ * Why: MoSPI directors need State (DES) view, not just department NSSO/CSO
+ */
+router.get('/des-heatmap', requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  // Use view des_competency_heatmap if exists, else aggregate
+  const { data: heatmapRows, error } = await supabaseAdmin.from('des_competency_heatmap').select('*');
+  if (!error && heatmapRows && heatmapRows.length) {
+    // pivot: state -> domain -> avg_score
+    const states = Array.from(new Set(heatmapRows.map((r:any)=>r.state)));
+    const domains = Array.from(new Set(heatmapRows.map((r:any)=>r.domain)));
+    const pivot: Record<string, Record<string, number>> = {};
+    heatmapRows.forEach((r:any)=>{ if(!pivot[r.state]) pivot[r.state]={}; pivot[r.state][r.domain]= Math.round(r.avg_score*10)/10; });
+    res.json({ success:true, data:{ states, domains, heatmap: pivot, raw: heatmapRows } });
+    return;
+  }
+  // Fallback: compute from profiles.state
+  const { data: profs } = await supabaseAdmin.from('profiles').select('id, state');
+  const { data: domains } = await supabaseAdmin.from('competency_domains').select('id, name');
+  const { data: scores } = await supabaseAdmin.from('user_competency_scores').select('user_id, current_score, competency:competencies(domain_id)');
+  const stateMap: Record<string, Record<string, {sum:number,cnt:number}>> = {};
+  scores?.forEach((s:any)=>{
+    const prof = profs?.find(p=>p.id===s.user_id);
+    const state = prof?.state || 'Unknown';
+    const domId = s.competency?.domain_id;
+    const dom = domains?.find(d=>d.id===domId)?.name || 'Unknown';
+    if(!stateMap[state]) stateMap[state]={};
+    if(!stateMap[state][dom]) stateMap[state][dom]={sum:0,cnt:0};
+    stateMap[state][dom].sum+= Number(s.current_score||0);
+    stateMap[state][dom].cnt+=1;
+  });
+  const heatmap: Record<string, Record<string, number>> = {};
+  Object.keys(stateMap).forEach(state=>{
+    heatmap[state]={};
+    Object.keys(stateMap[state]).forEach(dom=>{
+      const v=stateMap[state][dom];
+      heatmap[state][dom]= Math.round((v.sum/v.cnt)*10)/10;
+    });
+  });
+  res.json({ success:true, data:{ states: Object.keys(heatmap), domains: domains?.map(d=>d.name)||[], heatmap, raw: [] } });
+}));
+
+/**
  * POST /api/admin/predict
  * 
  * What-if simulation for workforce capability changes.
