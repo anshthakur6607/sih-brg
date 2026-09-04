@@ -67,25 +67,17 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// CORS configuration
-// Why: Allow frontend to communicate with backend (local + Vercel)
-const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:3000',
-  'https://frg-sable.vercel.app',
-  'https://brg-sable.vercel.app',
-  'https://*.vercel.app',
-];
+// CORS configuration — allow all Vercel previews (frg-omega, frg-sable, etc.) + localhost
+// Fix: `Access-Control-Allow-Origin: http://localhost:3000` blocked frg-omega; use dynamic reflect
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    const ok = allowedOrigins.some(o => {
-      if (o.includes('*')) {
-        const re = new RegExp('^' + o.replace('*.', '.*').replace(/\./g,'\\.').replace('.*','.*') + '$');
-        return re.test(origin);
-      }
-      return o === origin;
-    }) || origin.endsWith('.vercel.app') || origin.includes('localhost');
-    callback(null, ok);
+    // Allow any vercel.app, localhost, or explicit FRONTEND_URL
+    if (origin.endsWith('.vercel.app') || origin.includes('localhost') || origin === process.env.FRONTEND_URL) {
+      return callback(null, true);
+    }
+    // Fallback: reflect origin (permissive for hackathon demo)
+    return callback(null, true);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
