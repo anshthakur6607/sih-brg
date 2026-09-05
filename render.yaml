@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: sih-brg
+    env: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm run start
+    envVars:
+      AI_SERVICE_WS_URL: https://sih-aiservice-skillup-production.up.railway.app
+      PORT: 3001
+      NODE_ENV: production
+      SUPABASE_URL: "${SUPABASE_URL}"
+      SUPABASE_SERVICE_ROLE_KEY: "${SUPABASE_SERVICE_ROLE_KEY}"
+      SUPABASE_ANON_KEY: "${SUPABASE_ANON_KEY}"
+      JWT_SECRET: "${JWT_SECRET}"
+      FRONTEND_URL: "${FRONTEND_URL}"
+    autoDeploy: false
