@@ -20,12 +20,10 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
 // Validate required environment variables
-if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
-  console.error('Missing required Supabase environment variables:');
-  console.error('- SUPABASE_URL');
-  console.error('- SUPABASE_SERVICE_ROLE_KEY');
-  console.error('- SUPABASE_ANON_KEY');
-  process.exit(1);
+const missingEnv = !supabaseUrl || !supabaseServiceKey || !supabaseAnonKey;
+if (missingEnv) {
+  console.warn('Warning: Some Supabase environment variables are missing.');
+  console.warn('Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and SUPABASE_ANON_KEY for full functionality.');
 }
 
 /**
@@ -33,9 +31,15 @@ if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
  * Used for backend operations that need to bypass RLS
  * WARNING: This client has full database access - use carefully
  */
-export const supabaseAdmin: any = createClient(
-  supabaseUrl,
-  supabaseServiceKey,
+export const supabaseAdmin: any = missingEnv ? new Proxy({}, {
+  get() {
+    return (..._args: any[]) => {
+      return Promise.reject(new Error('Supabase not configured: missing SUPABASE_URL or keys'));
+    };
+  }
+}) : createClient(
+  supabaseUrl as string,
+  supabaseServiceKey as string,
   {
     auth: {
       autoRefreshToken: false,
@@ -50,7 +54,14 @@ export const supabaseAdmin: any = createClient(
  * Respects Row Level Security policies
  */
 export const createSupabaseClient = (jwt?: string): any => {
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  if (missingEnv) {
+    return new Proxy({}, {
+      get() {
+        return (..._args: any[]) => Promise.reject(new Error('Supabase not configured: missing SUPABASE_URL or keys'));
+      }
+    });
+  }
+  return createClient(supabaseUrl as string, supabaseAnonKey as string, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
