@@ -202,15 +202,20 @@ if (!process.env.VERCEL) {
   const httpServer = createServer(app);
 
   // WebSocket proxy (mounted at /ws/live-tutor) — bridges to AI service while satisfying browser CSP
-  try {
-    // dynamic import to avoid requiring ws/socket code in serverless environment
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { attachWebSocketProxy } = await import('./wsProxy.js');
-    attachWebSocketProxy(httpServer);
-  } catch (e) {
-    // if ws proxy import fails, log but continue — not fatal for standalone dev
-    console.warn('WebSocket proxy not attached:', e?.message || e);
-  }
+  // dynamic import to avoid requiring ws/socket code in serverless environment
+  import('./wsProxy.js')
+    .then((m) => {
+      const attach = m.attachLongPollingProxy || m.attachWebSocketProxy;
+      if (attach) {
+        try { attach(httpServer); }
+        catch (e) { console.warn('WS proxy attach failed:', e?.message || e); }
+      } else {
+        console.warn('No attach function exported from wsProxy.js');
+      }
+    })
+    .catch((e) => {
+      console.warn('WebSocket proxy not attached:', e?.message || e);
+    });
 
   httpServer.listen(PORT, () => {
     console.log(`SkillUp Backend API Gateway running on http://localhost:${PORT}`);
