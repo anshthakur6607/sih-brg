@@ -17,7 +17,22 @@ import type { IncomingMessage } from 'http';
 import { supabaseAdmin } from './lib/supabase.js';
 import { createServer } from 'http';
 
-const AI_SERVICE_WS_URL = process.env.AI_SERVICE_WS_URL || 'ws://127.0.0.1:8001';
+// Accept either a ws/wss URL or an http/https URL and normalize to ws/wss
+const rawAiUrl = process.env.AI_SERVICE_WS_URL || 'ws://127.0.0.1:8001';
+let AI_SERVICE_WS_URL: string;
+try {
+  const tmp = new URL(rawAiUrl);
+  if (tmp.protocol === 'http:' || tmp.protocol === 'https:') {
+    // convert http(s) -> ws(s)
+    AI_SERVICE_WS_URL = `${tmp.protocol === 'https:' ? 'wss:' : 'ws:'}//${tmp.host}`;
+  } else if (tmp.protocol === 'ws:' || tmp.protocol === 'wss:') {
+    AI_SERVICE_WS_URL = rawAiUrl.replace(/\/$/, '');
+  } else {
+    AI_SERVICE_WS_URL = rawAiUrl.replace(/\/$/, '');
+  }
+} catch {
+  AI_SERVICE_WS_URL = rawAiUrl;
+}
 const BACKEND_PORT = Number(process.env.PORT || 3001);
 
 let wss: WebSocketServer | null = null;
