@@ -11,7 +11,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
 // AI Service base URL from environment
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+const AI_SERVICE_URL = (process.env.AI_SERVICE_URL || 'http://localhost:8000').replace(/\/+$/, '');
 const AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY;
 
 // Validate API key is set

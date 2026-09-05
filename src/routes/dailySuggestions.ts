@@ -15,7 +15,7 @@ import type { AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = Router();
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+const AI_SERVICE_URL = (process.env.AI_SERVICE_URL || 'http://localhost:8001').replace(/\/+$/, '');
 const AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY || '';
 
 router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {

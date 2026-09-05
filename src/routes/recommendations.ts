@@ -26,10 +26,11 @@ const router = Router();
  */
 router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
-  const { limit = 10 } = req.query;
+  const rawLimit = Number(req.query.limit ?? 3);
+  const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 3, 1), 3);
 
   try {
-    const recommendations = await kgService.recommendCourses(userId, Number(limit));
+    const recommendations = await kgService.recommendCourses(userId, limit);
     
     // Get course details
     const courseIds = recommendations.map(r => r.course_id);
@@ -148,7 +149,7 @@ router.post('/generate', asyncHandler(async (req: AuthenticatedRequest, res: Res
     // Fallback: if KG produced nothing (no gaps / no courses seeded), return top courses as recommendations so UI never looks empty after survey
     if (recommendations.length === 0) {
       const { data: topCourses } = await supabaseAdmin.from('courses').select('*').order('duration_hours').limit(5);
-      recommendations = (topCourses || []).slice(0, 5).map((c: any, idx: number) => ({
+      recommendations = (topCourses || []).slice(0, 3).map((c: any, idx: number) => ({
         course_id: c.id,
         course_title: c.title,
         priority: (idx < 2 ? 'high' : 'medium') as 'high' | 'medium',
@@ -179,7 +180,7 @@ router.post('/generate', asyncHandler(async (req: AuthenticatedRequest, res: Res
       data: {
         assessed_competencies: competencies?.length || 0,
         recommendations_generated: recommendations.length,
-        recommendations: recommendations.slice(0, 10),
+        recommendations: recommendations.slice(0, 3),
         message: 'Survey processed, recommendations generated',
       },
     });

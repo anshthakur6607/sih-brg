@@ -15,48 +15,5 @@
       "src": "/(.*)",
       "dest": "src/index.ts"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production",
-    "PORT": "4000",
-    "SUPABASE_URL": "@supabase_url",
-    "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key",
-    "JWT_SECRET": "@jwt_secret",
-    "AI_SERVICE_URL": "@ai_service_url",
-    "AI_SERVICE_API_KEY": "@ai_service_api_key",
-    "AWS_ACCESS_KEY_ID": "@aws_access_key_id",
-    "AWS_SECRET_ACCESS_KEY": "@aws_secret_access_key",
-    "AWS_S3_BUCKET": "@aws_s3_bucket",
-    "AWS_REGION": "ap-south-1"
-  },
-  "functions": {
-    "src/index.ts": {
-      "memory": 1024,
-      "maxDuration": 30
-    }
-  },
-  "regions": ["bom1"],
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Credentials",
-          "value": "true"
-        },
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
-        }
-      ]
-    }
   ]
 }

@@ -73,7 +73,8 @@ router.post('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) =
   // Trigger RAG ingestion if AI service is available
   if (content_text && process.env.AI_SERVICE_URL) {
     try {
-      await fetch(`${process.env.AI_SERVICE_URL}/api/ai/rag/ingest`, {
+      const aiBaseUrl = process.env.AI_SERVICE_URL.replace(/\/+$/, '');
+      await fetch(`${aiBaseUrl}/api/ai/rag/ingest`, {
         method: 'POST',
         headers: { 'X-API-Key': process.env.AI_SERVICE_API_KEY || '' },
         body: JSON.stringify({

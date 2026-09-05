@@ -21,7 +21,7 @@ import crypto from 'crypto';
 
 const router = Router();
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+const AI_SERVICE_URL = (process.env.AI_SERVICE_URL || 'http://localhost:8001').replace(/\/+$/, '');
 const AI_API_KEY = process.env.AI_SERVICE_API_KEY || 'sk-ai-secret-key';
 
 /**

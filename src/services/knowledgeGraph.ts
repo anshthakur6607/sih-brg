@@ -189,7 +189,8 @@ export class KnowledgeGraphService {
    * 
    * Returns XAI explanations for each recommendation.
    */
-  async recommendCourses(userId: string, limit = 10): Promise<Recommendation[]> {
+  async recommendCourses(userId: string, limit = 3): Promise<Recommendation[]> {
+    const maxLimit = Math.min(Math.max(Number.isFinite(limit) ? Number(limit) : 3, 1), 3);
     const [contentRecs, collabRecs, ruleRecs] = await Promise.all([
       this.contentBased(userId),
       this.collaborativeFiltering(userId),
@@ -240,10 +241,10 @@ export class KnowledgeGraphService {
       }
     }
 
-    // Sort and limit
+    // Sort and limit to the fewest truly relevant courses for the user
     const sorted = Array.from(combined.values())
       .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+      .slice(0, maxLimit);
 
     // Persist explanations for XAI
     await supabaseAdmin.from('recommendation_explanations').insert(
@@ -279,7 +280,7 @@ export class KnowledgeGraphService {
     // Track already-recommended course IDs to avoid duplicates
     const seenCourses = new Set<string>();
 
-    for (const gap of gaps.slice(0, 5)) {
+    for (const gap of gaps.slice(0, 3)) {
       let courses: any[] | null = null;
       const compName = gap.competency?.name;
 
