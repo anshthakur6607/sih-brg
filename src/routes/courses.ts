@@ -79,28 +79,38 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) =>
   query = query.range(from, to).order('created_at', { ascending: false });
 
   // Execute query
-  const { data: courses, error, count } = await query;
+  try {
+    const { data: courses, error, count } = await query;
+    if (error) {
+      console.error('Course fetch error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch courses',
+        code: 'FETCH_FAILED',
+        detail: error.message || error,
+      });
+      return;
+    }
 
-  if (error) {
-    console.error('Course fetch error:', error);
+    res.json({
+      success: true,
+      data: courses || [],
+      pagination: {
+        total: count || 0,
+        page,
+        page_size,
+        total_pages: Math.ceil((count || 0) / page_size),
+      },
+    });
+  } catch (err: any) {
+    console.error('Unexpected course fetch exception:', err && err.stack ? err.stack : err);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch courses',
-      code: 'FETCH_FAILED',
+      code: 'FETCH_EXCEPTION',
+      detail: String(err?.message || err),
     });
-    return;
   }
-
-  res.json({
-    success: true,
-    data: courses || [],
-    pagination: {
-      total: count || 0,
-      page,
-      page_size,
-      total_pages: Math.ceil((count || 0) / page_size),
-    },
-  });
 }));
 
 /**

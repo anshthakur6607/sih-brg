@@ -45,9 +45,29 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) =>
       course: courseMap.get(rec.course_id) || null,
     }));
 
+    // Identify top recommendation (highest score) and produce a concise reason
+    const top = enriched.length > 0 ? enriched[0] : null;
+    let top_recommendation = null;
+    if (top) {
+      // Build a short AI-style rationale from existing structured explanation + factors
+      const factorStr = (top.factors || []).map((f: any) => `${f.factor.replace(/_/g, ' ')} (${Math.round((f.weight||0)*100)}%): ${f.detail}`).join('; ');
+      const why = `${top.explanation || ''}${factorStr ? ' Key reasons: ' + factorStr : ''}`;
+      top_recommendation = {
+        course_id: top.course_id,
+        course_title: top.course_title,
+        course: top.course,
+        score: top.score,
+        priority: top.priority,
+        why,
+        confidence: top.confidence,
+        algorithm: top.algorithm,
+      };
+    }
+
     res.json({
       success: true,
       data: enriched,
+      top_recommendation,
       meta: {
         total: enriched.length,
         algorithm: 'hybrid_kg',
