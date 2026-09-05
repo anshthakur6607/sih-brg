@@ -14,9 +14,65 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { asyncHandler, NotFoundError } from '../middleware/errorHandler.js';
+import { verifyToken } from '../middleware/auth.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = Router();
+
+/**
+ * GET /api/certificates/verify/:code
+ *
+ * Verifies a certificate by its unique verification code.
+ * PUBLIC endpoint — no auth. Scanned QR codes (Google Lens, camera apps)
+ * open /verify/[code] which calls this without a login.
+ *
+ * NOTE: defined BEFORE /:id so Express matches /verify/... here.
+ *
+ * Why: Allows anyone to verify a certificate's authenticity
+ * using the verification code printed on the certificate.
+ */
+router.get('/verify/:code', asyncHandler(async (req, res: Response) => {
+  const { code } = req.params;
+
+  const { data: certificate, error } = await supabaseAdmin
+    .from('certificates')
+    .select(`
+      *,
+      course:courses(title, provider),
+      user:profiles(full_name, designation, department)
+    `)
+    .eq('verification_code', code)
+    .single();
+
+  if (error || !certificate) {
+    res.status(404).json({
+      success: false,
+      error: 'Certificate not found or invalid',
+      code: 'INVALID_CERTIFICATE',
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      verified: true,
+      certificate: {
+        id: certificate.id,
+        verification_code: certificate.verification_code,
+        recipient_name: certificate.user?.full_name,
+        designation: certificate.user?.designation,
+        department: certificate.user?.department,
+        course_title: certificate.course?.title,
+        provider: certificate.course?.provider,
+        auto_score: certificate.auto_score,
+        verified_score: certificate.verified_score,
+        signed_by: certificate.signed_by_admin,
+        issue_date: certificate.issue_date,
+      },
+    },
+  });
+}));
 
 /**
  * GET /api/certificates
@@ -25,7 +81,7 @@ const router = Router();
  * 
  * Why: Users need to see their earned certificates.
  */
-router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', verifyToken, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
 
   const { data: certificates, error } = await supabaseAdmin
@@ -60,7 +116,7 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) =>
  * 
  * Why: Users need full certificate details for display/printing.
  */
-router.get('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:id', verifyToken, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const userId = req.user!.id;
 
@@ -86,57 +142,6 @@ router.get('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response)
 }));
 
 /**
- * GET /api/certificates/verify/:code
- * 
- * Verifies a certificate by its unique verification code.
- * Public endpoint for external verification.
- * 
- * Why: Allows anyone to verify a certificate's authenticity
- * using the verification code printed on the certificate.
- */
-router.get('/verify/:code', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const { code } = req.params;
-
-  const { data: certificate, error } = await supabaseAdmin
-    .from('certificates')
-    .select(`
-      *,
-      course:courses(title, provider),
-      user:profiles(full_name, designation, department)
-    `)
-    .eq('verification_code', code)
-    .single();
-
-  if (error || !certificate) {
-    res.status(404).json({
-      success: false,
-      error: 'Certificate not found or invalid',
-      code: 'INVALID_CERTIFICATE',
-    });
-    return;
-  }
-
-  res.json({
-    success: true,
-    data: {
-      verified: true,
-      certificate: {
-        id: certificate.id,
-        recipient_name: certificate.user?.full_name,
-        designation: certificate.user?.designation,
-        department: certificate.user?.department,
-        course_title: certificate.course?.title,
-        provider: certificate.course?.provider,
-        auto_score: certificate.auto_score,
-        verified_score: certificate.verified_score,
-        signed_by: certificate.signed_by_admin,
-        issue_date: certificate.issue_date,
-      },
-    },
-  });
-}));
-
-/**
  * POST /api/certificates
  * 
  * Creates a new certificate for a completed course.
@@ -144,7 +149,7 @@ router.get('/verify/:code', asyncHandler(async (req: AuthenticatedRequest, res: 
  * Why: Called after an assessment is approved by admin.
  * Generates unique verification code and stores certificate.
  */
-router.post('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', verifyToken, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
   const { attempt_id } = req.body;
 

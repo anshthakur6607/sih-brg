@@ -147,7 +147,7 @@ app.use('/api/profile', verifyToken, profileRoutes);
 app.use('/api/courses', verifyToken, courseRoutes);
 app.use('/api/assessments', verifyToken, assessmentRoutes);
 app.use('/api/competencies', verifyToken, competencyRoutes);
-app.use('/api/certificates', verifyToken, certificateRoutes);
+app.use('/api/certificates', certificateRoutes);
 app.use('/api/admin', verifyToken, adminRoutes);
 app.use('/api/ai', verifyToken, aiRoutes);
 app.use('/api/igot', verifyToken, igotRoutes);
