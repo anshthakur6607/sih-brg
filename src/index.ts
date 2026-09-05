@@ -196,31 +196,27 @@ app.use((req: Request, res: Response) => {
 // Why: Catch and format all unhandled errors
 app.use(errorHandler);
 
-// Start HTTP + WebSocket server
-// Why: Begin listening for incoming HTTP requests and WS upgrades
-const httpServer = createServer(app);
+// Start HTTP + WebSocket server only when running standalone (not on Vercel)
+// Why: Vercel serverless functions import this module — do NOT start a listener there.
+if (!process.env.VERCEL) {
+  const httpServer = createServer(app);
 
-// WebSocket proxy (mounted at /ws/live-tutor) — bridges to AI service while satisfying browser CSP
-import { attachWebSocketProxy } from './wsProxy.js';
-attachWebSocketProxy(httpServer);
+  // WebSocket proxy (mounted at /ws/live-tutor) — bridges to AI service while satisfying browser CSP
+  try {
+    // dynamic import to avoid requiring ws/socket code in serverless environment
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { attachWebSocketProxy } = await import('./wsProxy.js');
+    attachWebSocketProxy(httpServer);
+  } catch (e) {
+    // if ws proxy import fails, log but continue — not fatal for standalone dev
+    console.warn('WebSocket proxy not attached:', e?.message || e);
+  }
 
-httpServer.listen(PORT, () => {
-  console.log(`
-╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║   SkillUp Backend API Gateway                             ║
-║   Running on http://localhost:${PORT}                        ║
-║                                                           ║
-║   Endpoints:                                              ║
-║   - GET  /health        - Health check                    ║
-║   - GET  /api           - API information                 ║
-║   - POST /api/auth/*    - Authentication routes           ║
-║   - GET  /api/profile/* - User profile routes             ║
-║   - GET  /api/courses/* - Course catalog routes           ║
-║   - WS   /ws/live-tutor - WebSocket proxy to AI service   ║
-║                                                           ║
-╚═══════════════════════════════════════════════════════════╝
-  `);
-});
+  httpServer.listen(PORT, () => {
+    console.log(`SkillUp Backend API Gateway running on http://localhost:${PORT}`);
+  });
+} else {
+  console.log('Running on Vercel - exporting Express app as serverless handler.');
+}
 
 export default app;
