@@ -3,8 +3,9 @@ services:
     name: sih-brg
     env: node
     plan: free
+    engine: node22
     buildCommand: npm run build
-    startCommand: npm run start
+    startCommand: node dist/index.js
     envVars:
       AI_SERVICE_WS_URL: https://sih-aiservice-skillup-production.up.railway.app
       PORT: 3001
