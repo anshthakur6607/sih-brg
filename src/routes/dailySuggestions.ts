@@ -105,7 +105,8 @@ Return ONLY valid JSON, no markdown or extra text.`;
     let parsedObj: any = null;
 
     try {
-      parsedObj = JSON.parse(data.answer);
+      // Gemini often wraps JSON in ```json fences — strip before parsing.
+      parsedObj = JSON.parse(stripCodeFences(data.answer));
       if (Array.isArray(parsedObj)) {
         suggestions = parsedObj;
       } else if (parsedObj.suggestions) {
@@ -115,7 +116,9 @@ Return ONLY valid JSON, no markdown or extra text.`;
       suggestions = extractSuggestionsFromText(data.answer);
     }
 
-    const validSuggestions = suggestions.filter((s: any) => s && (s.course_id || s.course_title));
+    const validSuggestions = suggestions.filter(
+      (s: any) => s && (s.course_id || looksLikeRealTitle(s.course_title))
+    );
 
     res.json({
       success: true,
@@ -214,18 +217,43 @@ router.get('/trending', asyncHandler(async (req: AuthenticatedRequest, res: Resp
   });
 }));
 
+/** Remove ```json / ``` fences LLMs wrap answers in. */
+function stripCodeFences(text: string): string {
+  if (!text || typeof text !== 'string') return '';
+  return text.replace(/```json/gi, '```').replace(/```/g, '').trim();
+}
+
+/** True only for plausible human course titles — never raw JSON syntax lines. */
+function looksLikeRealTitle(v: unknown): boolean {
+  if (!v || typeof v !== 'string') return false;
+  const t = v.trim().replace(/^[-*\d.]+\s*/, '').trim();
+  if (t.length < 12) return false;
+  // JSON artifacts: "{", '"suggestions": [', '"course_id": null,', '},', ...
+  if (/^[{}\[\]",\s]*$/.test(t)) return false;
+  if (/^"[^"]*"\s*:\s*[[{]/.test(t)) return false; // '"key": [' or '"key": {'
+  if (/^"[^"]*"\s*:\s*(null|true|false|\d)/.test(t)) return false; // '"course_id": null,'
+  if (/^["'{\[]/.test(t) && /[:,}\]]\s*,?\s*$/.test(t)) return false;
+  if (!/[A-Za-z]{3,}/.test(t)) return false;
+  return true;
+}
+
 function extractSuggestionsFromText(text: string): any[] {
+  const clean = stripCodeFences(text);
   try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       if (parsed.suggestions) return parsed.suggestions;
       if (Array.isArray(parsed)) return parsed;
     }
   } catch {
-    const lines = text.split('\n').filter((l: string) => l.trim());
+    // Last resort: plain-text lines — but NEVER JSON syntax fragments.
+    const lines = clean
+      .split('\n')
+      .map((l: string) => l.replace(/^[-*\d.]+\s*/, '').trim())
+      .filter((l: string) => looksLikeRealTitle(l));
     return lines.slice(0, 5).map((l: string, i: number) => ({
-      course_title: l.replace(/^[-*\d.]+\s*/, '').trim(),
+      course_title: l,
       reason: 'Based on your profile and current trends',
       urgency: i < 2 ? 'immediate' : 'short_term',
       competencies_gained: [],
