@@ -183,6 +183,27 @@ app.post('/api/ai/live-tutor/session', verifyToken, async (req, res) => {
   res.json({ success:true, data });
 });
 
+// Live Tutor message send (requires auth) — POST for polling client
+app.post('/api/ai/live-tutor/send', verifyToken, async (req, res) => {
+  const { type, payload } = req.body;
+  const userId = (req as any).user.id;
+
+  // Forward to AI service
+  const aiBase = (process.env.AI_SERVICE_URL || 'http://localhost:8001').replace(/\/$/, '');
+  try {
+    const resAI = await fetch(`${aiBase}/api/ai/live-tutor/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': process.env.AI_SERVICE_API_KEY || '' },
+      body: JSON.stringify({ user_id: userId, type, payload }),
+    });
+    const j = await resAI.json().catch(() => ({})) as Record<string, unknown>;
+    if (!resAI.ok) throw new Error(`AI service ${resAI.status}: ${String(j.detail ?? j.error ?? 'failed')}`);
+    res.json({ success: true, data: j });
+  } catch (e: any) {
+    res.status(503).json({ success: false, error: e.message });
+  }
+});
+
 // 404 handler for unmatched routes
 // Why: Handle invalid API endpoints gracefully
 app.use((req: Request, res: Response) => {
