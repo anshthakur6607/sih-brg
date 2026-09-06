@@ -176,48 +176,75 @@ router.post('/start', asyncHandler(async (req: AuthenticatedRequest, res: Respon
     return;
   }
 
-  // Create new assessment attempt
-  const { data: attempt, error } = await supabaseAdmin
+  // Retake support: reuse the existing pending attempt instead of stacking
+  // duplicates every time the learner re-opens the exam.
+  const { data: pendingAttempt } = await supabaseAdmin
     .from('assessment_attempts')
-    .insert({
-      user_id: userId,
-      course_id,
-      status: 'pending',
-      passed: false,
-      tab_switch_count: 0,
-      fullscreen_exits: 0,
-      time_taken_seconds: 0,
-      telemetry_flags: [],
-    })
-    .select()
-    .single();
+    .select('id')
+    .eq('user_id', userId)
+    .eq('course_id', course_id)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (error) {
-    console.error('Assessment start error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to start assessment',
-      code: 'START_FAILED',
-    });
-    return;
+  let attemptId: string;
+  if (pendingAttempt?.id) {
+    attemptId = pendingAttempt.id;
+  } else {
+    // Create new assessment attempt
+    const { data: attempt, error } = await supabaseAdmin
+      .from('assessment_attempts')
+      .insert({
+        user_id: userId,
+        course_id,
+        status: 'pending',
+        passed: false,
+        tab_switch_count: 0,
+        fullscreen_exits: 0,
+        time_taken_seconds: 0,
+        telemetry_flags: [],
+      })
+      .select()
+      .single();
+
+    if (error || !attempt) {
+      console.error('Assessment start error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to start assessment',
+        code: 'START_FAILED',
+      });
+      return;
+    }
+    attemptId = attempt.id;
   }
 
-  // Generate or fetch questions based on course competencies
-  // For now, return placeholder - in production, would generate from AI
-  const { data: questions } = await supabaseAdmin
-    .from('assessment_questions')
-    .select('*')
-    .in('competency_id', course.target_competencies || [])
-    .limit(20);
+  // Fetch seed questions for course competencies (UUID entries only —
+  // target_competencies may hold plain names in seed rows; the exam page
+  // generates fresh AI questions anyway, so never fail the start here).
+  const compIds = (course.target_competencies || []).filter((v: unknown) =>
+    /^[0-9a-f-]{36}$/i.test(String(v))
+  );
+  let questions: unknown[] = [];
+  if (compIds.length > 0) {
+    const { data } = await supabaseAdmin
+      .from('assessment_questions')
+      .select('*')
+      .in('competency_id', compIds)
+      .limit(20);
+    questions = data || [];
+  }
 
-  res.status(201).json({
+  res.status(pendingAttempt ? 200 : 201).json({
     success: true,
     data: {
-      attempt_id: attempt.id,
-      questions: questions || [],
+      attempt_id: attemptId,
+      questions,
       start_time: new Date().toISOString(),
+      resumed: !!pendingAttempt,
     },
-    message: 'Assessment started',
+    message: pendingAttempt ? 'Resumed pending assessment' : 'Assessment started',
   });
 }));
 
