@@ -50,12 +50,12 @@ router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) =>
   } = courseFilterSchema.parse(req.query);
 
   // Build query
+  // NOTE: courses has no FK to competency_domains (only target_competencies
+  // JSONB + optional competency_id), so no domain embed here — embedding it
+  // makes PostgREST reject the whole query with "Could not find a relationship".
   let query = supabaseAdmin
     .from('courses')
-    .select(`
-      *,
-      competency_domain:competency_domains(name)
-    `, { count: 'exact' });
+    .select('*', { count: 'exact' });
 
   // Apply filters
   if (source) {
@@ -327,12 +327,11 @@ router.get('/tpac/calendar', asyncHandler(async (req: AuthenticatedRequest, res:
 router.get('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
 
+  // NOTE: no domain embed — courses has no FK to competency_domains.
+  // Domain info comes from target_competency_details fetched below.
   const { data: course, error } = await supabaseAdmin
     .from('courses')
-    .select(`
-      *,
-      competency_domain:competency_domains(name)
-    `)
+    .select('*')
     .eq('id', id)
     .single();
 
@@ -341,10 +340,15 @@ router.get('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response)
   }
 
   if (course.target_competencies && course.target_competencies.length > 0) {
-    const { data: competencies } = await supabaseAdmin
+    // target_competencies holds UUIDs in some rows, plain names ("Leadership")
+    // in seed rows — match on the right column to avoid uuid syntax errors.
+    const entries = course.target_competencies.map((v: unknown) => String(v));
+    const allUuid = entries.every((v: string) => /^[0-9a-f-]{36}$/i.test(v));
+    let q = supabaseAdmin
       .from('competencies')
-      .select('id, name, domain_id, domain:competency_domains(name)')
-      .in('id', course.target_competencies);
+      .select('id, name, domain_id, domain:competency_domains(name)');
+    q = allUuid ? q.in('id', entries) : q.in('name', entries);
+    const { data: competencies } = await q;
 
     (course as Record<string, unknown>).target_competency_details = competencies;
   }

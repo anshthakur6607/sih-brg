@@ -46,12 +46,11 @@ router.get('/courses', asyncHandler(async (req: AuthenticatedRequest, res: Respo
   } = iGOTCourseFilterSchema.parse(req.query);
 
   // Build query
+  // NOTE: courses has no FK to competency_domains — embedding it makes
+  // PostgREST reject the whole query ("Could not find a relationship").
   let query = supabaseAdmin
     .from('courses')
-    .select(`
-      *,
-      competency_domain:competency_domains(name)
-    `, { count: 'exact' });
+    .select('*', { count: 'exact' });
 
   // Apply filters
   if (source) {
@@ -109,12 +108,10 @@ router.get('/courses', asyncHandler(async (req: AuthenticatedRequest, res: Respo
 router.get('/courses/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
 
+  // NOTE: no domain embed here (no FK); see target_competency_details below.
   const { data: course, error } = await supabaseAdmin
     .from('courses')
-    .select(`
-      *,
-      competency_domain:competency_domains(name)
-    `)
+    .select('*')
     .eq('id', id)
     .single();
 
@@ -127,12 +124,15 @@ router.get('/courses/:id', asyncHandler(async (req: AuthenticatedRequest, res: R
     return;
   }
 
-  // Get target competencies details
+  // Get target competencies details (entries may be UUIDs or plain names)
   if (course.target_competencies && course.target_competencies.length > 0) {
-    const { data: competencies } = await supabaseAdmin
+    const entries = course.target_competencies.map((v: unknown) => String(v));
+    const allUuid = entries.every((v: string) => /^[0-9a-f-]{36}$/i.test(v));
+    let q = supabaseAdmin
       .from('competencies')
-      .select('id, name, domain_id, domain:competency_domains(name)')
-      .in('id', course.target_competencies);
+      .select('id, name, domain_id, domain:competency_domains(name)');
+    q = allUuid ? q.in('id', entries) : q.in('name', entries);
+    const { data: competencies } = await q;
 
     (course as Record<string, unknown>).target_competency_details = competencies;
   }
